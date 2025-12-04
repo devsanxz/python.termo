@@ -9,76 +9,90 @@ AMARELO = "\033[43;30m"
 VERMELHO = "\033[41;97m"
 ROXO = "\033[45;97m"
 
-# === DADOS (MVP) ===
-# Dicionário pequeno hardcoded
-PALAVRAS_RAW = ["TERMO", "MORTE", "ONTEM", "METRO", "AUREO", "FESTA", "PORTA", "LIVRO", "SAGAZ"]
+# === CONFIGURAÇÃO ===
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DICIO_PATH = os.path.join(BASE_DIR, "resources", "dicionario.txt")
+MAX_TENTATIVAS = 7  # Jogo "5ETE"
+
+def carregar_palavras():
+    if not os.path.exists(DICIO_PATH):
+        print(f"ERRO: Dicionário não encontrado em {DICIO_PATH}")
+        print("Rode 'python3 tools/build_dict.py' primeiro.")
+        exit(1)
+    
+    with open(DICIO_PATH, "r", encoding="utf-8") as f:
+        # Lê, remove quebras de linha e normaliza
+        return [linha.strip().upper() for linha in f if len(linha.strip()) == 5]
+
+# Carrega no início (Cache)
+PALAVRAS_VALIDAS = carregar_palavras()
 
 def remover_acentos(texto):
-    # Normaliza para NFD (separa letra do acento) e filtra não-espaçados
     return "".join(c for c in unicodedata.normalize("NFD", texto)
                    if unicodedata.category(c) != "Mn").upper()
 
-# Lista normalizada para validação
-PALAVRAS_VALIDAS = [remover_acentos(p) for p in PALAVRAS_RAW]
+# Lista normalizada para validação rápida (Set é O(1))
+PALAVRAS_NORM = set(remover_acentos(p) for p in PALAVRAS_VALIDAS)
 
 def pintar(letra, estilo):
     return f"{estilo}[ {letra} ]{RESET}"
 
 def main():
     os.system("clear")
-    print(f"{ROXO}=== TERMO v2.0 (Logic Edition) ==={RESET}\n")
+    print(f"{ROXO}=== 5ETE (Termo SRE) ==={RESET}\n")
     
-    # Escolhe uma palavra secreta aleatória
-    SEGREDO_RAW = random.choice(PALAVRAS_RAW)
+    # Escolhe segredo
+    SEGREDO_RAW = random.choice(PALAVRAS_VALIDAS)
     SEGREDO = remover_acentos(SEGREDO_RAW)
     
-    tentativas_restantes = 6
+    tentativas = 0
     
-    while tentativas_restantes > 0:
-        print(f"Tentativas restantes: {tentativas_restantes}")
-        entrada = input("Digite 5 letras: ").strip().upper()
+    while tentativas < MAX_TENTATIVAS:
+        print(f"Tentativa {tentativas + 1} de {MAX_TENTATIVAS}")
+        try:
+            entrada = input("Digite: ").strip().upper()
+        except (EOFError, KeyboardInterrupt):
+            print("\nSaindo...")
+            break
+
         tentativa_norm = remover_acentos(entrada)
         
-        # 1. Validação de Tamanho
+        # Validações
         if len(tentativa_norm) != 5:
-            print(">>> Digite exatamente 5 letras!")
+            print(">>> 5 letras, por favor.")
             continue
             
-        # 2. Validação de Existência (Dicionário)
-        if tentativa_norm not in PALAVRAS_VALIDAS:
+        if tentativa_norm not in PALAVRAS_NORM:
             print(">>> Palavra desconhecida!")
             continue
             
-        # === O ALGORITMO DE 3 PASSADAS ===
-        
-        # Listas mutáveis para processamento
+        # Lógica de 3 Passadas (Preservada da v1.0)
         t_chars = list(tentativa_norm)
         s_chars = list(SEGREDO)
-        s_copia = list(SEGREDO) # A vítima para depenar
-        cores = [None] * 5      # Array de resultados
+        s_copia = list(SEGREDO)
+        cores = [None] * 5
         
-        # Passada 1: VERDES (Prioridade Máxima)
+        # 1. Verdes
         for i in range(5):
             if t_chars[i] == s_chars[i]:
                 cores[i] = VERDE
-                s_copia[i] = None # Consome a letra exata da cópia
+                s_copia[i] = None
         
-        # Passada 2: AMARELOS (O que sobrou)
+        # 2. Amarelos
         for i in range(5):
-            if cores[i] is None: # Se ainda não foi resolvido
+            if cores[i] is None:
                 letra = t_chars[i]
                 if letra in s_copia:
                     cores[i] = AMARELO
-                    # Encontra a primeira ocorrência e remove (depena)
                     idx = s_copia.index(letra)
-                    s_copia[idx] = None 
+                    s_copia[idx] = None
         
-        # Passada 3: VERMELHOS (Resto)
+        # 3. Vermelhos
         for i in range(5):
             if cores[i] is None:
                 cores[i] = VERMELHO
                 
-        # === RENDERIZAÇÃO ===
+        # Renderiza
         linha_visual = ""
         for i in range(5):
             linha_visual += pintar(t_chars[i], cores[i]) + " "
@@ -86,13 +100,13 @@ def main():
         print(f"\n{linha_visual}\n")
         
         if tentativa_norm == SEGREDO:
-            print(f"{VERDE} PARABÉNS! VOCÊ ACERTOU! {RESET}")
+            print(f"{VERDE} VICTORY! A palavra era {SEGREDO_RAW} {RESET}")
             break
             
-        tentativas_restantes -= 1
+        tentativas += 1
 
-    if tentativas_restantes == 0:
-        print(f"{VERMELHO} PERDEU! A palavra era: {SEGREDO_RAW} {RESET}")
+    if tentativas == MAX_TENTATIVAS:
+        print(f"{VERMELHO} GAME OVER. Era: {SEGREDO_RAW} {RESET}")
 
 if __name__ == "__main__":
     main()
